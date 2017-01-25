@@ -1,0 +1,10 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"importHelpers": false,
+		"module": "CommonJS",
+		"outDir": "../../test/unit/src"
+	}
+}

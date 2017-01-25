@@ -1,0 +1,12 @@
+{
+  "name": "@offirmo/rx-auto",
+  "version": "0.0.1",
+  "description": "intelligently combines and resolve a set of generic streams (Rx.observable, promises, static values) in \"async.auto\" style",
+  "main": "dist/index.js",
+  "repository": "https://github.com/Offirmo/rx-auto.git",
+  "author": "Offirmo <offirmo.net@gmail.com>",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "^2.1.5"
+  }
+}
