@@ -6,5 +6,10 @@
 		"importHelpers": false,
 		"module": "CommonJS",
 		"outDir": "../../test/unit/src"
-	}
+	},
+	"include": [
+		"../../typings-custom/**/*.ts",
+		"../../src/**/*.ts",
+		"../../test/website1.ts"
+	]
 }

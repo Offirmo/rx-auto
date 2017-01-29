@@ -6,7 +6,31 @@
   "repository": "https://github.com/Offirmo/rx-auto.git",
   "author": "Offirmo <offirmo.net@gmail.com>",
   "license": "UNLICENSED",
+  "scripts": {
+    "__prod": "~~~~~~~ PRODUCTION ~~~~~~~",
+    "build": "node scripts/build.js",
+    "np": "np",
+    "__dev": "~~~~~~~ DEVELOPMENT ~~~~~~~",
+    "test": "echo 'should write tests ;-)'",
+    "dev1": "tsc --watch --project meta/test",
+    "tslint": "tslint",
+    "demo1": "ts-node --project meta/test test/demos/website1.ts",
+    "demo1:watch": "nodemon --config meta/test/nodemon.json node_modules/.bin/ts-node --project meta/test test/demos/website1.ts",
+    "__misc": "~~~~~~~ MISC ~~~~~~~",
+    "tsc": "tsc",
+    "ts-node": "ts-node",
+    "nodemon": "nodemon",
+    "__helpers": "----------- Helpers -----------"
+  },
+  "dependencies": {
+    "lodash": "^4.17.4",
+    "rxjs": "^5.0.3"
+  },
   "devDependencies": {
+    "@types/lodash": "^4.14.50",
+    "nodemon": "^1.11.0",
+    "ts-node": "^2.0.0",
+    "tslint": "^4.4.2",
     "typescript": "^2.1.5"
   }
 }
