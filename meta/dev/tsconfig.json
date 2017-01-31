@@ -4,6 +4,8 @@
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
 		"importHelpers": false,
+
+		"noEmit": false,
 		"module": "CommonJS",
 		"outDir": "../../test/unit/src"
 	},

@@ -3,7 +3,7 @@
 
 ////////////////////////////////////
 
-import { Observable } from 'rxjs'
+import { Observable } from '@reactivex/rxjs'
 
 import { auto, OPERATORS } from '../../src'
 
@@ -15,9 +15,9 @@ const pad = '000000'
 const pad_size = 6
 function log_observable(observable: Observable<any>, id: string) {
 	return observable.subscribe(
-		x =>     console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ..."${x.toString()}"`),
-		err => console.error(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...Error: "${err}" !`),
-		() =>    console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...Completed.`)
+		x   =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ..."${x.toString()}"`),
+		err => console.error(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...[Error: "${err}" !]`),
+		()  =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...[Completed]`)
 	)
 }
 ////////////////////////////////////
@@ -44,7 +44,7 @@ switch (test_case) {
 
 function fetch_data() {
 	return new Promise(resolve => {
-		console.log('observable rxo_fresh_content promise created !')
+		console.log('observable "rxo_fresh_content" promise created !')
 		setTimeout(() => {
 			console.log('observable rxo_fresh_content : resolving (and completing)')
 			resolve(FRESH_DATA)

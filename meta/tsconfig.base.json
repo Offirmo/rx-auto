@@ -27,16 +27,12 @@
 		"emitDecoratorMetadata": true,
 		"experimentalDecorators": true,
 		"importHelpers": true,
-		"module": "ES2015",
 		"newLine": "lf",
-		"outDir": "../dist/src.es7",
 		"sourceMap": true,
-		"target": "ES2017"
+		"noEmit": true
 	},
 	"include": [
 		"../typings-custom/**/*.ts",
 		"../src/**/*.ts"
-	],
-	"exclude": [
 	]
 }

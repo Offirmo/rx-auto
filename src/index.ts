@@ -1,6 +1,6 @@
 ////////////////////////////////////
 
-import * as Rx from 'rxjs'
+import * as Rx from '@reactivex/rxjs'
 import * as _ from 'lodash'
 
 ////////////////////////////////////

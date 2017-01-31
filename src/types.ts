@@ -1,6 +1,6 @@
 ////////////////////////////////////
 
-import { Observable, Subject } from 'rxjs'
+import { Observable } from '@reactivex/rxjs'
 
 ////////////////////////////////////
 
