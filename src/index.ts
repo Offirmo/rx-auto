@@ -9,6 +9,7 @@ import {
 	UnresolvedStreamDef,
 	UnresolvedStreamDefMap,
 	ResolvedStreamDef,
+	ResolvedStreamDefMap,
 	SubjectsMap,
 } from './types'
 
@@ -25,7 +26,7 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 	if (!_.isString(id) && !_.isSymbol(id))
 		throw new Error(`stream ids must be strings or symbols ! ("${typeof id}")`)
 
-	let stream_def: UnresolvedStreamDef
+	let stream_def: UnresolvedStreamDef | undefined = undefined
 
 	if (_.isArray(raw_definition)) {
 		// async style format, convert it
@@ -35,7 +36,16 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 			generator: (raw_definition as string[]).slice(-1)[0]
 		}
 	}
-	else {
+	else if (_.isObject(raw_definition)) {
+		// is it a stream definition ?
+		if (raw_definition.id && _.isString(raw_definition.id) && raw_definition.dependencies && raw_definition.generator) {
+			// yes
+			stream_def = raw_definition as UnresolvedStreamDef
+		}
+	}
+
+	// fallback
+	if (!stream_def) {
 		// trivial async style format, convert it
 		stream_def = {
 			id,
@@ -51,34 +61,34 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 
 
 function resolve_stream_from_static_value(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
-	if (stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct value but has dependencies !`)
-	const observable = Rx.Observable.of(stream_def.generator)
+	const observable$ = Rx.Observable.of(stream_def.generator)
 	return {
 		...stream_def,
-		observable,
-		subject: observable.multicast(new Rx.Subject()).refCount()
+		value: stream_def.generator,
+		promise: Promise.resolve(stream_def.generator),
+		observable$,
+		subject$: observable$.multicast(new Rx.Subject()).refCount()
 	}
 }
 
 
 function resolve_stream_from_promise(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
-	if (stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct promise but has dependencies !`)
-	const observable = Rx.Observable.fromPromise(stream_def.generator)
+	const observable$ = Rx.Observable.fromPromise(stream_def.generator)
 	return {
 		...stream_def,
-		observable,
-		subject: observable.multicast(new Rx.Subject()).refCount()
+		promise: stream_def.generator,
+		observable$,
+		subject$: observable$.multicast(new Rx.Subject()).refCount()
 	}
 }
 
 
 function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
-	if (stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct observable but has dependencies !`)
-	const observable = stream_def.generator
+	const observable$ = stream_def.generator
 	return {
 		...stream_def,
-		observable,
-		subject: observable.multicast(new Rx.Subject()).refCount()
+		observable$,
+		subject$: observable$.multicast(new Rx.Subject()).refCount()
 	}
 }
 
@@ -88,11 +98,15 @@ function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap,
 
 	if (!dependencies.length) throw new Error(`stream ${id} operator should have dependencies !`)
 
-	let observable: Rx.Observable<any>
+	let observable$: Rx.Observable<any>
 
 	switch (generator) {
 		case OPERATORS.merge:
-			observable = Rx.Observable.merge(...stream_def.dependencies.map(id => stream_defs_by_id[id].observable!))
+			observable$ = Rx.Observable.merge(
+				...stream_def.dependencies
+				.map(id => stream_defs_by_id[id] as ResolvedStreamDef)
+				.map(resolvedStreamDef => resolvedStreamDef.observable$)
+			)
 			break
 
 		default:
@@ -101,8 +115,8 @@ function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap,
 
 	return {
 		...stream_def,
-		observable,
-		subject: observable.multicast(new Rx.Subject()).refCount()
+		observable$,
+		subject$: observable$.multicast(new Rx.Subject()).refCount()
 	}
 }
 
@@ -110,20 +124,31 @@ function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap,
 function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const { id } = stream_def
 	let { generator } = stream_def
+	const generated = _.isFunction(generator)
 
 	console.log(`resolving stream "${id}"...`)
 
-	// TODO improve
-	if (_.isFunction(generator)) generator = generator() // one call is allowed
+	if (_.isFunction(generator)) {
+		// allow custom constructs. We pass full dependencies results
+		const stream_deps_by_id: ResolvedStreamDefMap = {}
+		stream_def.dependencies.forEach(id => {
+			stream_deps_by_id[id] = stream_defs_by_id[id] as ResolvedStreamDef
+		})
+		// one call is allowed
+		generator = generator(stream_deps_by_id)
+		console.log('from generator function:', generator)
+	}
 	if (!generator) throw new Error(`stream definition ${id} generator function should return something !`)
 
 	if (generator.then) {
 		// it's a promise !
+		if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct promise but has dependencies !`)
 		return resolve_stream_from_promise({...stream_def, generator})
 	}
 
 	if (generator.subscribe) {
 		// it's an observable !
+		if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct observable but has dependencies !`)
 		return resolve_stream_from_observable({...stream_def, generator})
 	}
 
@@ -140,6 +165,7 @@ function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, st
 		}
 	}
 
+	if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct value but has dependencies !`)
 	return resolve_stream_from_static_value({...stream_def, generator})
 }
 
@@ -148,7 +174,7 @@ function resolve_streams(stream_defs_by_id: UnresolvedStreamDefMap, unresolved_s
 	const still_unresolved_stream_defs: UnresolvedStreamDef[] = []
 
 	unresolved_stream_defs.forEach(stream_def => {
-		const has_unresolved_deps = stream_def.dependencies.some(stream_id => !stream_defs_by_id[stream_id].observable)
+		const has_unresolved_deps = stream_def.dependencies.some(stream_id => !stream_defs_by_id[stream_id].observable$)
 
 		if (!has_unresolved_deps) {
 			stream_defs_by_id[stream_def.id] = resolve_stream_observable(stream_defs_by_id, stream_def)
@@ -198,7 +224,7 @@ function auto(stream_definitions: { [k: string]: any }): SubjectsMap {
 	const subjects: SubjectsMap = {}
 
 	stream_ids.forEach(stream_id => {
-		subjects[stream_id] = stream_defs_by_id[stream_id].subject!
+		subjects[stream_id] = (stream_defs_by_id[stream_id] as ResolvedStreamDef).subject$
 	})
 
 	return subjects
@@ -207,6 +233,10 @@ function auto(stream_definitions: { [k: string]: any }): SubjectsMap {
 ////////////////////////////////////
 
 export {
+	UnresolvedStreamDef,
+	UnresolvedStreamDefMap,
+	ResolvedStreamDef,
+	ResolvedStreamDefMap,
 	OPERATORS,
 	auto,
 }
