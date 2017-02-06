@@ -22,7 +22,7 @@
     function uniformize_stream_definition(raw_definition, id) {
         if (!_.isString(id) && !_.isSymbol(id))
             throw new Error("stream ids must be strings or symbols ! (\"" + typeof id + "\")");
-        var stream_def;
+        var stream_def = undefined;
         if (_.isArray(raw_definition)) {
             // async style format, convert it
             stream_def = {
@@ -31,7 +31,15 @@
                 generator: raw_definition.slice(-1)[0]
             };
         }
-        else {
+        else if (_.isObject(raw_definition)) {
+            // is it a stream definition ?
+            if (raw_definition.id && _.isString(raw_definition.id) && raw_definition.dependencies && raw_definition.generator) {
+                // yes
+                stream_def = raw_definition;
+            }
+        }
+        // fallback
+        if (!stream_def) {
             // trivial async style format, convert it
             stream_def = {
                 id: id,
@@ -44,53 +52,61 @@
         return stream_def;
     }
     function resolve_stream_from_static_value(stream_def) {
-        if (stream_def.dependencies.length)
-            throw new Error("stream " + stream_def.id + " is a direct value but has dependencies !");
-        var observable = Rx.Observable.of(stream_def.generator);
-        return tslib_1.__assign({}, stream_def, { observable: observable, subject: observable.multicast(new Rx.Subject()).refCount() });
+        var observable$ = Rx.Observable.of(stream_def.generator);
+        return tslib_1.__assign({}, stream_def, { value: stream_def.generator, promise: Promise.resolve(stream_def.generator), observable$: observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
     }
     function resolve_stream_from_promise(stream_def) {
-        if (stream_def.dependencies.length)
-            throw new Error("stream " + stream_def.id + " is a direct promise but has dependencies !");
-        var observable = Rx.Observable.fromPromise(stream_def.generator);
-        return tslib_1.__assign({}, stream_def, { observable: observable, subject: observable.multicast(new Rx.Subject()).refCount() });
+        var observable$ = Rx.Observable.fromPromise(stream_def.generator);
+        return tslib_1.__assign({}, stream_def, { promise: stream_def.generator, observable$: observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
     }
     function resolve_stream_from_observable(stream_def) {
-        if (stream_def.dependencies.length)
-            throw new Error("stream " + stream_def.id + " is a direct observable but has dependencies !");
-        var observable = stream_def.generator;
-        return tslib_1.__assign({}, stream_def, { observable: observable, subject: observable.multicast(new Rx.Subject()).refCount() });
+        var observable$ = stream_def.generator;
+        return tslib_1.__assign({}, stream_def, { observable$: observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
     }
     function resolve_stream_from_operator(stream_defs_by_id, stream_def) {
         var id = stream_def.id, dependencies = stream_def.dependencies, generator = stream_def.generator;
         if (!dependencies.length)
             throw new Error("stream " + id + " operator should have dependencies !");
-        var observable;
+        var observable$;
         switch (generator) {
             case OPERATORS.merge:
-                observable = (_a = Rx.Observable).merge.apply(_a, stream_def.dependencies.map(function (id) { return stream_defs_by_id[id].observable; }));
+                observable$ = (_a = Rx.Observable).merge.apply(_a, stream_def.dependencies
+                    .map(function (id) { return stream_defs_by_id[id]; })
+                    .map(function (resolvedStreamDef) { return resolvedStreamDef.observable$; }));
                 break;
             default:
                 throw new Error("stream " + id + ": unrecognized operator ! " + generator);
         }
-        return tslib_1.__assign({}, stream_def, { observable: observable, subject: observable.multicast(new Rx.Subject()).refCount() });
+        return tslib_1.__assign({}, stream_def, { observable$: observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
         var _a;
     }
     function resolve_stream_observable(stream_defs_by_id, stream_def) {
         var id = stream_def.id;
         var generator = stream_def.generator;
+        var generated = _.isFunction(generator);
         console.log("resolving stream \"" + id + "\"...");
-        // TODO improve
-        if (_.isFunction(generator))
-            generator = generator(); // one call is allowed
+        if (_.isFunction(generator)) {
+            // allow custom constructs. We pass full dependencies results
+            var stream_deps_by_id_1 = {};
+            stream_def.dependencies.forEach(function (id) {
+                stream_deps_by_id_1[id] = stream_defs_by_id[id];
+            });
+            // one call is allowed
+            generator = generator(stream_deps_by_id_1);
+            console.log('from generator function:', generator);
+        }
         if (!generator)
             throw new Error("stream definition " + id + " generator function should return something !");
         if (generator.then) {
             // it's a promise !
+            if (!generated && stream_def.dependencies.length)
+                throw new Error("stream " + stream_def.id + " is a direct promise but has dependencies !");
             return resolve_stream_from_promise(tslib_1.__assign({}, stream_def, { generator: generator }));
         }
         if (generator.subscribe) {
             // it's an observable !
+            if (!generated && stream_def.dependencies.length)
+                throw new Error("stream " + stream_def.id + " is a direct observable but has dependencies !");
             return resolve_stream_from_observable(tslib_1.__assign({}, stream_def, { generator: generator }));
         }
         if (_.isSymbol(generator)) {
@@ -104,12 +120,14 @@
                     break;
             }
         }
+        if (!generated && stream_def.dependencies.length)
+            throw new Error("stream " + stream_def.id + " is a direct value but has dependencies !");
         return resolve_stream_from_static_value(tslib_1.__assign({}, stream_def, { generator: generator }));
     }
     function resolve_streams(stream_defs_by_id, unresolved_stream_defs) {
         var still_unresolved_stream_defs = [];
         unresolved_stream_defs.forEach(function (stream_def) {
-            var has_unresolved_deps = stream_def.dependencies.some(function (stream_id) { return !stream_defs_by_id[stream_id].observable; });
+            var has_unresolved_deps = stream_def.dependencies.some(function (stream_id) { return !stream_defs_by_id[stream_id].observable$; });
             if (!has_unresolved_deps) {
                 stream_defs_by_id[stream_def.id] = resolve_stream_observable(stream_defs_by_id, stream_def);
             }
@@ -145,7 +163,7 @@
             throw new Error('deadlock resolving streams, please check dependencies !');
         var subjects = {};
         stream_ids.forEach(function (stream_id) {
-            subjects[stream_id] = stream_defs_by_id[stream_id].subject;
+            subjects[stream_id] = stream_defs_by_id[stream_id].subject$;
         });
         return subjects;
     }
