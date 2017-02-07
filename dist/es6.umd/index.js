@@ -66,7 +66,7 @@
     function resolve_stream_from_operator(stream_defs_by_id, stream_def) {
         const { id, dependencies, generator } = stream_def;
         if (!dependencies.length)
-            throw new Error(`stream ${id} operator should have dependencies !`);
+            throw new Error(`stream "${id}" operator should have dependencies !`);
         let observable$;
         switch (generator) {
             case OPERATORS.merge:
@@ -92,20 +92,21 @@
             });
             // one call is allowed
             generator = generator(stream_deps_by_id);
-            console.log('from generator function:', generator);
+            console.log(`from "${stream_def.id}" generator function: "${generator}"`);
         }
-        if (!generator)
-            throw new Error(`stream definition ${id} generator function should return something !`);
-        if (generator.then) {
+        if (!generator) {
+            console.warn(`Warning: stream definition "${id}" generator function returned "${generator}". This will be considered a final static value.`);
+        }
+        if (generator && generator.then) {
             // it's a promise !
             if (!generated && stream_def.dependencies.length)
-                throw new Error(`stream ${stream_def.id} is a direct promise but has dependencies !`);
+                throw new Error(`stream "${stream_def.id}" is a direct promise but has dependencies !`);
             return resolve_stream_from_promise(tslib_1.__assign({}, stream_def, { generator }));
         }
-        if (generator.subscribe) {
+        if (generator && generator.subscribe) {
             // it's an observable !
             if (!generated && stream_def.dependencies.length)
-                throw new Error(`stream ${stream_def.id} is a direct observable but has dependencies !`);
+                throw new Error(`stream "${stream_def.id}" is a direct observable but has dependencies !`);
             return resolve_stream_from_observable(tslib_1.__assign({}, stream_def, { generator }));
         }
         if (_.isSymbol(generator)) {
@@ -120,7 +121,7 @@
             }
         }
         if (!generated && stream_def.dependencies.length)
-            throw new Error(`stream ${stream_def.id} is a direct value but has dependencies !`);
+            throw new Error(`stream "${stream_def.id}" is a direct value but has dependencies !`);
         return resolve_stream_from_static_value(tslib_1.__assign({}, stream_def, { generator }));
     }
     function resolve_streams(stream_defs_by_id, unresolved_stream_defs) {

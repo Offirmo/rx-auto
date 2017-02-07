@@ -96,7 +96,7 @@ function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): Resolv
 function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const { id, dependencies, generator } = stream_def
 
-	if (!dependencies.length) throw new Error(`stream ${id} operator should have dependencies !`)
+	if (!dependencies.length) throw new Error(`stream "${id}" operator should have dependencies !`)
 
 	let observable$: Rx.Observable<any>
 
@@ -136,19 +136,21 @@ function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, st
 		})
 		// one call is allowed
 		generator = generator(stream_deps_by_id)
-		console.log('from generator function:', generator)
+		console.log(`from "${stream_def.id}" generator function: "${generator}"`)
 	}
-	if (!generator) throw new Error(`stream definition ${id} generator function should return something !`)
+	if (!generator) {
+		console.warn(`Warning: stream definition "${id}" generator function returned "${generator}". This will be considered a final static value.`)
+	}
 
-	if (generator.then) {
+	if (generator && generator.then) {
 		// it's a promise !
-		if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct promise but has dependencies !`)
+		if (!generated && stream_def.dependencies.length) throw new Error(`stream "${stream_def.id}" is a direct promise but has dependencies !`)
 		return resolve_stream_from_promise({...stream_def, generator})
 	}
 
-	if (generator.subscribe) {
+	if (generator && generator.subscribe) {
 		// it's an observable !
-		if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct observable but has dependencies !`)
+		if (!generated && stream_def.dependencies.length) throw new Error(`stream "${stream_def.id}" is a direct observable but has dependencies !`)
 		return resolve_stream_from_observable({...stream_def, generator})
 	}
 
@@ -165,7 +167,7 @@ function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, st
 		}
 	}
 
-	if (!generated && stream_def.dependencies.length) throw new Error(`stream ${stream_def.id} is a direct value but has dependencies !`)
+	if (!generated && stream_def.dependencies.length) throw new Error(`stream "${stream_def.id}" is a direct value but has dependencies !`)
 	return resolve_stream_from_static_value({...stream_def, generator})
 }
 

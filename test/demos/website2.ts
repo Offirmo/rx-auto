@@ -15,7 +15,7 @@ const pad = '000000'
 const pad_size = 6
 function log_observable(observable: Observable<any>, id: string) {
 	return observable.subscribe(
-		x   =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ..."${x.toString()}"`),
+		x   =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ..."${x}"`),
 		err => console.error(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...[Error: "${err}" !]`),
 		()  =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...[Completed]`)
 	)
@@ -25,17 +25,23 @@ function log_observable(observable: Observable<any>, id: string) {
 
 let FETCH_DELAY = 1000
 let FRESH_DATA = 'fresh foo'
-let CACHED_DATA: string | null = null
+let CACHED_DATA: string | null = 'cached foo'
+let FETCH_SHOULD_SUCCEED = true
 
-let test_case = 1
+let test_case = 3
 switch (test_case) {
 	case 1:
-		// cache available
-		CACHED_DATA = 'cached foo'
+		// cache available, fetch success
 		break
 
 	case 2:
 		// no cache yet
+		CACHED_DATA = null
+		break
+
+	case 3:
+		// failure to fetch (promise rejection)
+		FETCH_SHOULD_SUCCEED = false
 		break
 
 	default:
@@ -50,17 +56,20 @@ function get_vault_id() {
 }
 
 function fetch_raw_data(vault_id: string) {
-	return new Promise(resolve => {
+	return new Promise((resolve, reject) => {
 		console.log('fetch_raw_data called !')
 		setTimeout(() => {
 			console.log('fetch_raw_data resolving...')
-			resolve(`[raw data for ${vault_id}]` + FRESH_DATA)
+			if (!FETCH_SHOULD_SUCCEED)
+				reject(new Error('404'))
+			else
+				resolve(`[raw data for ${vault_id}]` + FRESH_DATA)
 		}, FETCH_DELAY)
 	})
 }
 
 function get_cached_raw_data(vault_id: string): string | null {
-	return `[cached data for ${vault_id}]` + CACHED_DATA
+	return CACHED_DATA
 }
 
 function fetch_data() {
