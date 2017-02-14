@@ -10,6 +10,7 @@ import {
 	UnresolvedStreamDefMap,
 	ResolvedStreamDef,
 	ResolvedStreamDefMap,
+	SubjectFlavors,
 	SubjectsMap,
 } from './types'
 
@@ -59,6 +60,14 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 	return stream_def
 }
 
+function subjects_for(observable$: Rx.Observable<any>, initial_behavior_value?: any): { plain$: Rx.Observable<any>, behavior$: Rx.Observable<any>, async$: Rx.Observable<any> } {
+	const plain$ = observable$.multicast(new Rx.Subject()).refCount()
+	return {
+		plain$,
+		behavior$: plain$.multicast(new Rx.BehaviorSubject(initial_behavior_value)).refCount(),
+		async$: plain$.multicast(new Rx.AsyncSubject()).refCount(),
+	}
+}
 
 function resolve_stream_from_static_value(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const observable$ = Rx.Observable.of(stream_def.generator)
@@ -67,7 +76,7 @@ function resolve_stream_from_static_value(stream_def: UnresolvedStreamDef): Reso
 		value: stream_def.generator,
 		promise: Promise.resolve(stream_def.generator),
 		observable$,
-		subject$: observable$.multicast(new Rx.Subject()).refCount()
+		subjects: subjects_for(observable$, stream_def.initialValue),
 	}
 }
 
@@ -78,7 +87,7 @@ function resolve_stream_from_promise(stream_def: UnresolvedStreamDef): ResolvedS
 		...stream_def,
 		promise: stream_def.generator,
 		observable$,
-		subject$: observable$.multicast(new Rx.Subject()).refCount()
+		subjects: subjects_for(observable$, stream_def.initialValue),
 	}
 }
 
@@ -88,7 +97,7 @@ function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): Resolv
 	return {
 		...stream_def,
 		observable$,
-		subject$: observable$.multicast(new Rx.Subject()).refCount()
+		subjects: subjects_for(observable$, stream_def.initialValue),
 	}
 }
 
@@ -116,7 +125,7 @@ function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap,
 	return {
 		...stream_def,
 		observable$,
-		subject$: observable$.multicast(new Rx.Subject()).refCount()
+		subjects: subjects_for(observable$, stream_def.initialValue),
 	}
 }
 
@@ -226,7 +235,7 @@ function auto(stream_definitions: { [k: string]: any }): SubjectsMap {
 	const subjects: SubjectsMap = {}
 
 	stream_ids.forEach(stream_id => {
-		subjects[stream_id] = (stream_defs_by_id[stream_id] as ResolvedStreamDef).subject$
+		subjects[stream_id] = (stream_defs_by_id[stream_id] as ResolvedStreamDef).subjects
 	})
 
 	return subjects
@@ -239,6 +248,8 @@ export {
 	UnresolvedStreamDefMap,
 	ResolvedStreamDef,
 	ResolvedStreamDefMap,
+	SubjectFlavors,
+	SubjectsMap,
 	OPERATORS,
 	auto,
 }

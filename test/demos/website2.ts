@@ -92,13 +92,13 @@ const subjects = auto({
 })
 
 for (let id in subjects) {
-	log_observable(subjects[id], id)
+	log_observable(subjects[id].plain$, id)
 }
 
 ////////////////////////////////////
 
 // actions
-const sbs1 = subjects['fresh_data'].subscribe(x => {
+const sbs1 = subjects['fresh_data'].plain$.subscribe(x => {
 	// pretend we did it...
 	console.info('updated cache with fresh data:', x)
 	sbs1.unsubscribe();

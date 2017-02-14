@@ -14,12 +14,19 @@ import { Observable } from '@reactivex/rxjs'
 interface UnresolvedStreamDef {
 	readonly id: string
 	readonly dependencies: string[]
+	readonly initialValue?: any // for creating the BehaviorSubject
 
 	// intermediate data
 	readonly generator: any
 
 	// the generalized stream (its presence hints the stream is resolved and can be upcasted)
 	readonly observable$?: Observable<any>
+}
+
+export interface SubjectFlavors<T> {
+	readonly plain$: Observable<T>
+	readonly behavior$: Observable<T>
+	readonly async$: Observable<T>
 }
 
 interface ResolvedStreamDef extends UnresolvedStreamDef {
@@ -29,8 +36,8 @@ interface ResolvedStreamDef extends UnresolvedStreamDef {
 	readonly promise?: Promise<any>
 	// the generalized stream
 	readonly observable$: Observable<any>
-	// its corresponding subject
-	readonly subject$: Observable<any>
+	// its corresponding subjects (all variant created for convenience)
+	readonly subjects: SubjectFlavors<any>
 }
 
 interface UnresolvedStreamDefMap {
@@ -42,7 +49,7 @@ interface ResolvedStreamDefMap {
 }
 
 interface SubjectsMap {
-	[k: string]: Observable<any>
+	[k: string]: SubjectFlavors<any>
 }
 
 ////////////////////////////////////

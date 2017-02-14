@@ -1,14 +1,18 @@
 
 TODO
 - allow filters ? (prevent null or duplicated data)
-- better subjects
 - more operators
 - more complex case
 
 (next)
 ------
+-
+
+v0.0.5
+------
 - null & undefined now allowed as static values
 - improved log traces
+- changed returned subject to a map with 3 flavors of subject
 
 v0.0.4
 ------

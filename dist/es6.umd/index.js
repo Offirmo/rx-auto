@@ -51,17 +51,25 @@
             throw new Error(`stream definition "${id}" should have a generator !`);
         return stream_def;
     }
+    function subjects_for(observable$, initial_behavior_value) {
+        const plain$ = observable$.multicast(new Rx.Subject()).refCount();
+        return {
+            plain$,
+            behavior$: plain$.multicast(new Rx.BehaviorSubject(initial_behavior_value)).refCount(),
+            async$: plain$.multicast(new Rx.AsyncSubject()).refCount(),
+        };
+    }
     function resolve_stream_from_static_value(stream_def) {
         const observable$ = Rx.Observable.of(stream_def.generator);
-        return tslib_1.__assign({}, stream_def, { value: stream_def.generator, promise: Promise.resolve(stream_def.generator), observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
+        return tslib_1.__assign({}, stream_def, { value: stream_def.generator, promise: Promise.resolve(stream_def.generator), observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
     }
     function resolve_stream_from_promise(stream_def) {
         const observable$ = Rx.Observable.fromPromise(stream_def.generator);
-        return tslib_1.__assign({}, stream_def, { promise: stream_def.generator, observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
+        return tslib_1.__assign({}, stream_def, { promise: stream_def.generator, observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
     }
     function resolve_stream_from_observable(stream_def) {
         const observable$ = stream_def.generator;
-        return tslib_1.__assign({}, stream_def, { observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
+        return tslib_1.__assign({}, stream_def, { observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
     }
     function resolve_stream_from_operator(stream_defs_by_id, stream_def) {
         const { id, dependencies, generator } = stream_def;
@@ -77,7 +85,7 @@
             default:
                 throw new Error(`stream ${id}: unrecognized operator ! ${generator}`);
         }
-        return tslib_1.__assign({}, stream_def, { observable$, subject$: observable$.multicast(new Rx.Subject()).refCount() });
+        return tslib_1.__assign({}, stream_def, { observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
     }
     function resolve_stream_observable(stream_defs_by_id, stream_def) {
         const { id } = stream_def;
@@ -163,7 +171,7 @@
             throw new Error('deadlock resolving streams, please check dependencies !');
         const subjects = {};
         stream_ids.forEach(stream_id => {
-            subjects[stream_id] = stream_defs_by_id[stream_id].subject$;
+            subjects[stream_id] = stream_defs_by_id[stream_id].subjects;
         });
         return subjects;
     }

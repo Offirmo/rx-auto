@@ -62,37 +62,16 @@ const subjects = auto({
 })
 
 for (let id in subjects) {
-	log_observable(subjects[id], id)
+	log_observable(subjects[id].plain$, id)
 }
 
 ////////////////////////////////////
 
 // actions
-const sbs1 = subjects['fresh_data'].subscribe(x => {
+const sbs1 = subjects['fresh_data'].plain$.subscribe(x => {
 	// pretend we did it...
 	console.info('updated cache with fresh data:', x)
 	sbs1.unsubscribe();
 })
 
-// race ?
-// test every cases: cache, no cache
-
 setTimeout(() => console.log('artificial wait done'), 2000)
-
-/*
- var subject = new Rx.BehaviorSubject(0); // 0 is the initial value
-
- subject.subscribe({
- next: (v) => console.log('observerA: ' + v)
- });
-
- subject.next(1);
- subject.next(2);
-
- subject.subscribe({
- next: (v) => console.log('observerB: ' + v)
- });
-
- subject.next(3);
- */
-
