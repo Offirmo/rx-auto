@@ -6,7 +6,7 @@ TODO
 
 (next)
 ------
--
+- relaxed some readonly restrictions on the external API (don't coerce the final user)
 
 v0.0.5
 ------

@@ -4,13 +4,6 @@ import { Observable } from '@reactivex/rxjs'
 
 ////////////////////////////////////
 
-// https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-1.html
-/*type Partial<T> = {
-	[P in keyof T]?: T[P]
-}*/
-
-////////////////////////////////////
-
 interface UnresolvedStreamDef {
 	readonly id: string
 	readonly dependencies: string[]
@@ -24,9 +17,9 @@ interface UnresolvedStreamDef {
 }
 
 export interface SubjectFlavors<T> {
-	readonly plain$: Observable<T>
-	readonly behavior$: Observable<T>
-	readonly async$: Observable<T>
+	plain$: Observable<T>
+	behavior$: Observable<T>
+	async$: Observable<T>
 }
 
 interface ResolvedStreamDef extends UnresolvedStreamDef {
