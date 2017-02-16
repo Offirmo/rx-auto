@@ -13,6 +13,7 @@
     var Rx = require("@reactivex/rxjs");
     var _ = require("lodash");
     var OPERATORS = {
+        combineLatest: Symbol('combineLatest'),
         concat: Symbol('concat'),
         merge: Symbol('merge'),
         zip: Symbol('zip'),
@@ -49,6 +50,10 @@
         }
         if (!stream_def.generator)
             throw new Error("stream definition \"" + id + "\" should have a generator !");
+        stream_def.dependencies.forEach(function (dependency) {
+            if (!_.isString(dependency) && !_.isSymbol(dependency))
+                throw new Error("dependencies must be stream ids, which must be strings or symbols ! (\"" + typeof dependency + "\")");
+        });
         return stream_def;
     }
     function subjects_for(observable$, initial_behavior_value) {
@@ -76,23 +81,34 @@
         if (!dependencies.length)
             throw new Error("stream \"" + id + "\" operator should have dependencies !");
         var observable$;
+        var dependencies$ = stream_def.dependencies
+            .map(function (id) { return stream_defs_by_id[id]; })
+            .map(function (resolvedStreamDef) { return resolvedStreamDef.observable$; });
+        console.log("Applying an operator...", generator, stream_def.dependencies, dependencies$);
         switch (generator) {
+            case OPERATORS.combineLatest:
+                observable$ = (_a = Rx.Observable).combineLatest.apply(_a, dependencies$);
+                break;
+            case OPERATORS.concat:
+                observable$ = (_b = Rx.Observable).concat.apply(_b, dependencies$);
+                break;
             case OPERATORS.merge:
-                observable$ = (_a = Rx.Observable).merge.apply(_a, stream_def.dependencies
-                    .map(function (id) { return stream_defs_by_id[id]; })
-                    .map(function (resolvedStreamDef) { return resolvedStreamDef.observable$; }));
+                observable$ = (_c = Rx.Observable).merge.apply(_c, dependencies$);
+                break;
+            case OPERATORS.zip:
+                observable$ = (_d = Rx.Observable).zip.apply(_d, dependencies$);
                 break;
             default:
-                throw new Error("stream " + id + ": unrecognized operator ! " + generator);
+                throw new Error("stream " + id + ": unrecognized or not implemented operator ! " + generator.toString());
         }
         return tslib_1.__assign({}, stream_def, { observable$: observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
-        var _a;
+        var _a, _b, _c, _d;
     }
     function resolve_stream_observable(stream_defs_by_id, stream_def) {
         var id = stream_def.id;
         var generator = stream_def.generator;
         var generated = _.isFunction(generator);
-        console.log("resolving stream \"" + id + "\"...");
+        console.log("resolving stream \"" + id + "\"...", { generated: generated, generator: generator });
         if (_.isFunction(generator)) {
             // allow custom constructs. We pass full dependencies results
             var stream_deps_by_id_1 = {};
@@ -120,6 +136,7 @@
         }
         if (_.isSymbol(generator)) {
             switch (generator) {
+                case OPERATORS.combineLatest:
                 case OPERATORS.concat:
                 case OPERATORS.merge:
                 case OPERATORS.zip:
@@ -156,6 +173,14 @@
             var standardized_definition = uniformize_stream_definition(stream_definitions[stream_id], stream_id);
             stream_defs_by_id[stream_id] = standardized_definition;
             stream_defs.push(standardized_definition);
+        });
+        // do some global checks
+        stream_ids.forEach(function (stream_id) {
+            var dependencies = stream_defs_by_id[stream_id].dependencies;
+            dependencies.forEach(function (dependency) {
+                if (!stream_ids.includes(dependency))
+                    throw new Error("Stream definition for \"" + stream_id + "\" references an unknown dependency \"" + dependency + "\" !");
+            });
         });
         // resolve related streams
         var progress = true;

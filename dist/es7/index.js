@@ -3,6 +3,7 @@ import * as tslib_1 from "tslib";
 import * as Rx from '@reactivex/rxjs';
 import * as _ from 'lodash';
 const OPERATORS = {
+    combineLatest: Symbol('combineLatest'),
     concat: Symbol('concat'),
     merge: Symbol('merge'),
     zip: Symbol('zip'),
@@ -38,6 +39,10 @@ function uniformize_stream_definition(raw_definition, id) {
     }
     if (!stream_def.generator)
         throw new Error(`stream definition "${id}" should have a generator !`);
+    stream_def.dependencies.forEach(dependency => {
+        if (!_.isString(dependency) && !_.isSymbol(dependency))
+            throw new Error(`dependencies must be stream ids, which must be strings or symbols ! ("${typeof dependency}")`);
+    });
     return stream_def;
 }
 function subjects_for(observable$, initial_behavior_value) {
@@ -65,14 +70,25 @@ function resolve_stream_from_operator(stream_defs_by_id, stream_def) {
     if (!dependencies.length)
         throw new Error(`stream "${id}" operator should have dependencies !`);
     let observable$;
+    const dependencies$ = stream_def.dependencies
+        .map(id => stream_defs_by_id[id])
+        .map(resolvedStreamDef => resolvedStreamDef.observable$);
+    console.log(`Applying an operator...`, generator, stream_def.dependencies, dependencies$);
     switch (generator) {
+        case OPERATORS.combineLatest:
+            observable$ = Rx.Observable.combineLatest(...dependencies$);
+            break;
+        case OPERATORS.concat:
+            observable$ = Rx.Observable.concat(...dependencies$);
+            break;
         case OPERATORS.merge:
-            observable$ = Rx.Observable.merge(...stream_def.dependencies
-                .map(id => stream_defs_by_id[id])
-                .map(resolvedStreamDef => resolvedStreamDef.observable$));
+            observable$ = Rx.Observable.merge(...dependencies$);
+            break;
+        case OPERATORS.zip:
+            observable$ = Rx.Observable.zip(...dependencies$);
             break;
         default:
-            throw new Error(`stream ${id}: unrecognized operator ! ${generator}`);
+            throw new Error(`stream ${id}: unrecognized or not implemented operator ! ${generator.toString()}`);
     }
     return tslib_1.__assign({}, stream_def, { observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
 }
@@ -80,7 +96,7 @@ function resolve_stream_observable(stream_defs_by_id, stream_def) {
     const { id } = stream_def;
     let { generator } = stream_def;
     const generated = _.isFunction(generator);
-    console.log(`resolving stream "${id}"...`);
+    console.log(`resolving stream "${id}"...`, { generated, generator });
     if (_.isFunction(generator)) {
         // allow custom constructs. We pass full dependencies results
         const stream_deps_by_id = {};
@@ -108,6 +124,7 @@ function resolve_stream_observable(stream_defs_by_id, stream_def) {
     }
     if (_.isSymbol(generator)) {
         switch (generator) {
+            case OPERATORS.combineLatest:
             case OPERATORS.concat:
             case OPERATORS.merge:
             case OPERATORS.zip:
@@ -144,6 +161,14 @@ function auto(stream_definitions) {
         const standardized_definition = uniformize_stream_definition(stream_definitions[stream_id], stream_id);
         stream_defs_by_id[stream_id] = standardized_definition;
         stream_defs.push(standardized_definition);
+    });
+    // do some global checks
+    stream_ids.forEach(stream_id => {
+        const dependencies = stream_defs_by_id[stream_id].dependencies;
+        dependencies.forEach(dependency => {
+            if (!stream_ids.includes(dependency))
+                throw new Error(`Stream definition for "${stream_id}" references an unknown dependency "${dependency}" !`);
+        });
     });
     // resolve related streams
     let progress = true;

@@ -15,6 +15,7 @@ import {
 } from './types'
 
 const OPERATORS = {
+	combineLatest: Symbol('combineLatest'),
 	concat: Symbol('concat'),
 	merge: Symbol('merge'),
 	zip: Symbol('zip'),
@@ -57,6 +58,11 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 
 	if (!stream_def.generator) throw new Error(`stream definition "${id}" should have a generator !`)
 
+	stream_def.dependencies.forEach(dependency => {
+		if (!_.isString(dependency) && !_.isSymbol(dependency))
+			throw new Error(`dependencies must be stream ids, which must be strings or symbols ! ("${typeof dependency}")`)
+	})
+
 	return stream_def
 }
 
@@ -80,7 +86,6 @@ function resolve_stream_from_static_value(stream_def: UnresolvedStreamDef): Reso
 	}
 }
 
-
 function resolve_stream_from_promise(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const observable$ = Rx.Observable.fromPromise(stream_def.generator)
 	return {
@@ -91,7 +96,6 @@ function resolve_stream_from_promise(stream_def: UnresolvedStreamDef): ResolvedS
 	}
 }
 
-
 function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const observable$ = stream_def.generator
 	return {
@@ -101,7 +105,6 @@ function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): Resolv
 	}
 }
 
-
 function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
 	const { id, dependencies, generator } = stream_def
 
@@ -109,17 +112,30 @@ function resolve_stream_from_operator(stream_defs_by_id: UnresolvedStreamDefMap,
 
 	let observable$: Rx.Observable<any>
 
+	const dependencies$ = stream_def.dependencies
+		.map(id => stream_defs_by_id[id] as ResolvedStreamDef)
+		.map(resolvedStreamDef => resolvedStreamDef.observable$)
+	console.log(`Applying an operator...`, generator, stream_def.dependencies, dependencies$)
+
 	switch (generator) {
+		case OPERATORS.combineLatest:
+			observable$ = Rx.Observable.combineLatest(...dependencies$)
+			break
+
+		case OPERATORS.concat:
+			observable$ = Rx.Observable.concat(...dependencies$)
+			break
+
 		case OPERATORS.merge:
-			observable$ = Rx.Observable.merge(
-				...stream_def.dependencies
-				.map(id => stream_defs_by_id[id] as ResolvedStreamDef)
-				.map(resolvedStreamDef => resolvedStreamDef.observable$)
-			)
+			observable$ = Rx.Observable.merge(...dependencies$)
+			break
+
+		case OPERATORS.zip:
+			observable$ = Rx.Observable.zip(...dependencies$)
 			break
 
 		default:
-			throw new Error(`stream ${id}: unrecognized operator ! ${generator}`)
+			throw new Error(`stream ${id}: unrecognized or not implemented operator ! ${generator.toString()}`)
 	}
 
 	return {
@@ -135,7 +151,7 @@ function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, st
 	let { generator } = stream_def
 	const generated = _.isFunction(generator)
 
-	console.log(`resolving stream "${id}"...`)
+	console.log(`resolving stream "${id}"...`, {generated, generator})
 
 	if (_.isFunction(generator)) {
 		// allow custom constructs. We pass full dependencies results
@@ -165,6 +181,7 @@ function resolve_stream_observable(stream_defs_by_id: UnresolvedStreamDefMap, st
 
 	if (_.isSymbol(generator)) {
 		switch (generator) {
+			case OPERATORS.combineLatest:
 			case OPERATORS.concat:
 			case OPERATORS.merge:
 			case OPERATORS.zip:
@@ -214,6 +231,15 @@ function auto(stream_definitions: { [k: string]: any }): SubjectsMap {
 
 		stream_defs_by_id[stream_id] = standardized_definition
 		stream_defs.push(standardized_definition)
+	})
+
+	// do some global checks
+	stream_ids.forEach(stream_id => {
+		const dependencies = stream_defs_by_id[stream_id].dependencies
+		dependencies.forEach(dependency => {
+			if (!stream_ids.includes(dependency))
+				throw new Error(`Stream definition for "${stream_id}" references an unknown dependency "${dependency}" !`)
+		})
 	})
 
 	// resolve related streams

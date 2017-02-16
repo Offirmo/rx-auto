@@ -7,9 +7,9 @@ interface UnresolvedStreamDef {
     readonly observable$?: Observable<any>;
 }
 export interface SubjectFlavors<T> {
-    readonly plain$: Observable<T>;
-    readonly behavior$: Observable<T>;
-    readonly async$: Observable<T>;
+    plain$: Observable<T>;
+    behavior$: Observable<T>;
+    async$: Observable<T>;
 }
 interface ResolvedStreamDef extends UnresolvedStreamDef {
     readonly value?: any;

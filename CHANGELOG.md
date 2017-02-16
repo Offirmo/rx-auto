@@ -3,10 +3,17 @@ TODO
 - allow filters ? (prevent null or duplicated data)
 - more operators
 - more complex case
+- enhance/remove logs
 
 (next)
 ------
+-
+
+v0.0.6
+------
 - relaxed some readonly restrictions on the external API (don't coerce the final user)
+- added checks: dependency ids are correctly typed and references actual streams
+- relax "is direct observable bt has dependencies"
 
 v0.0.5
 ------

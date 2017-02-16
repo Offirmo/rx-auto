@@ -2,7 +2,7 @@
 	"compileOnSave": false,
 	"compilerOptions": {
 		"allowJs": false,
-		"lib": [ "ES2015", "DOM" ],
+		"lib": [ "es7", "DOM" ],
 		"moduleResolution": "node",
 
 		"listEmittedFiles": false,

@@ -1,5 +1,6 @@
 import { UnresolvedStreamDef, UnresolvedStreamDefMap, ResolvedStreamDef, ResolvedStreamDefMap, SubjectFlavors, SubjectsMap } from './types';
 declare const OPERATORS: {
+    combineLatest: symbol;
     concat: symbol;
     merge: symbol;
     zip: symbol;
