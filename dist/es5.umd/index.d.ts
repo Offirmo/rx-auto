@@ -5,7 +5,11 @@ declare const OPERATORS: {
     merge: symbol;
     zip: symbol;
 };
+interface Injected {
+    debug_id: string;
+    logger: Console;
+}
 declare function auto(stream_definitions: {
     [k: string]: any;
-}): SubjectsMap;
-export { UnresolvedStreamDef, UnresolvedStreamDefMap, ResolvedStreamDef, ResolvedStreamDefMap, SubjectFlavors, SubjectsMap, OPERATORS, auto };
+}, options?: Partial<Injected>): SubjectsMap;
+export { UnresolvedStreamDef, UnresolvedStreamDefMap, ResolvedStreamDef, ResolvedStreamDefMap, SubjectFlavors, SubjectsMap, OPERATORS, Injected, auto };

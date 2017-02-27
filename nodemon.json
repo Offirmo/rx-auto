@@ -1,0 +1,8 @@
+{
+	"verbose": true,
+	"watch": [
+		"src",
+		"test"
+	],
+	"ext": "js json ts map"
+}

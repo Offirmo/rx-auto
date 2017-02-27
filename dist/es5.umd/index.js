@@ -9,9 +9,11 @@
     }
 })(function (require, exports) {
     "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
     var tslib_1 = require("tslib");
     var Rx = require("@reactivex/rxjs");
     var _ = require("lodash");
+    ////////////////////////////////////
     var OPERATORS = {
         combineLatest: Symbol('combineLatest'),
         concat: Symbol('concat'),
@@ -19,6 +21,7 @@
         zip: Symbol('zip'),
     };
     exports.OPERATORS = OPERATORS;
+    var invocation_count = 0;
     ////////////////////////////////////
     function uniformize_stream_definition(raw_definition, id) {
         if (!_.isString(id) && !_.isSymbol(id))
@@ -76,7 +79,7 @@
         var observable$ = stream_def.generator;
         return tslib_1.__assign({}, stream_def, { observable$: observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
     }
-    function resolve_stream_from_operator(stream_defs_by_id, stream_def) {
+    function resolve_stream_from_operator(injected, stream_defs_by_id, stream_def) {
         var id = stream_def.id, dependencies = stream_def.dependencies, generator = stream_def.generator;
         if (!dependencies.length)
             throw new Error("stream \"" + id + "\" operator should have dependencies !");
@@ -84,7 +87,7 @@
         var dependencies$ = stream_def.dependencies
             .map(function (id) { return stream_defs_by_id[id]; })
             .map(function (resolvedStreamDef) { return resolvedStreamDef.observable$; });
-        console.log("Applying an operator...", generator, stream_def.dependencies, dependencies$);
+        injected.logger.log("Applying an operator...", generator, stream_def.dependencies, dependencies$);
         switch (generator) {
             case OPERATORS.combineLatest:
                 observable$ = (_a = Rx.Observable).combineLatest.apply(_a, dependencies$);
@@ -104,11 +107,11 @@
         return tslib_1.__assign({}, stream_def, { observable$: observable$, subjects: subjects_for(observable$, stream_def.initialValue) });
         var _a, _b, _c, _d;
     }
-    function resolve_stream_observable(stream_defs_by_id, stream_def) {
+    function resolve_stream_observable(injected, stream_defs_by_id, stream_def) {
         var id = stream_def.id;
         var generator = stream_def.generator;
         var generated = _.isFunction(generator);
-        console.log("resolving stream \"" + id + "\"...", { generated: generated, generator: generator });
+        injected.logger.log("resolving stream \"" + id + "\"...", { generated: generated, generator: generator });
         if (_.isFunction(generator)) {
             // allow custom constructs. We pass full dependencies results
             var stream_deps_by_id_1 = {};
@@ -117,10 +120,10 @@
             });
             // one call is allowed
             generator = generator(stream_deps_by_id_1);
-            console.log("from \"" + stream_def.id + "\" generator function: \"" + generator + "\"");
+            injected.logger.log("from \"" + stream_def.id + "\" generator function: \"" + generator + "\"");
         }
         if (!generator) {
-            console.warn("Warning: stream definition \"" + id + "\" generator function returned \"" + generator + "\". This will be considered a final static value.");
+            injected.logger.warn("Warning: stream definition \"" + id + "\" generator function returned \"" + generator + "\". This will be considered a final static value.");
         }
         if (generator && generator.then) {
             // it's a promise !
@@ -140,7 +143,7 @@
                 case OPERATORS.concat:
                 case OPERATORS.merge:
                 case OPERATORS.zip:
-                    return resolve_stream_from_operator(stream_defs_by_id, tslib_1.__assign({}, stream_def, { generator: generator }));
+                    return resolve_stream_from_operator(injected, stream_defs_by_id, tslib_1.__assign({}, stream_def, { generator: generator }));
                 default:
                     // not ours, consider it a direct sync value
                     break;
@@ -150,12 +153,14 @@
             throw new Error("stream \"" + stream_def.id + "\" is a direct value but has dependencies !");
         return resolve_stream_from_static_value(tslib_1.__assign({}, stream_def, { generator: generator }));
     }
-    function resolve_streams(stream_defs_by_id, unresolved_stream_defs) {
+    function resolve_streams(injected, stream_defs_by_id, unresolved_stream_defs) {
         var still_unresolved_stream_defs = [];
         unresolved_stream_defs.forEach(function (stream_def) {
             var has_unresolved_deps = stream_def.dependencies.some(function (stream_id) { return !stream_defs_by_id[stream_id].observable$; });
             if (!has_unresolved_deps) {
-                stream_defs_by_id[stream_def.id] = resolve_stream_observable(stream_defs_by_id, stream_def);
+                injected.logger.groupCollapsed("resolving stream \"" + stream_def.id + "\"\u2026");
+                stream_defs_by_id[stream_def.id] = resolve_stream_observable(injected, stream_defs_by_id, stream_def);
+                injected.logger.groupEnd();
             }
             else {
                 still_unresolved_stream_defs.push(stream_def);
@@ -163,7 +168,22 @@
         });
         return still_unresolved_stream_defs;
     }
-    function auto(stream_definitions) {
+    function auto(stream_definitions, options) {
+        if (options === void 0) { options = {}; }
+        invocation_count++;
+        var injected = {
+            debug_id: options.debug_id || "rx-auto invocation #" + invocation_count + "\u2026",
+            logger: options.logger || {
+                groupCollapsed: function () { return undefined; },
+                groupEnd: function () { return undefined; },
+                log: function () { return undefined; },
+                info: function () { return undefined; },
+                warn: function () { return undefined; },
+                error: function () { return undefined; },
+            },
+        };
+        injected.logger.groupCollapsed(injected.debug_id);
+        injected.logger.log('Starting… params=', { stream_definitions: stream_definitions, options: options });
         var stream_defs_by_id = {};
         var stream_defs = [];
         // check and uniformize definitions...
@@ -174,7 +194,9 @@
             stream_defs_by_id[stream_id] = standardized_definition;
             stream_defs.push(standardized_definition);
         });
+        injected.logger.info("Found " + stream_defs.length + " stream definitions:", Object.keys(stream_defs_by_id));
         // do some global checks
+        injected.logger.log('Starting a global check…');
         stream_ids.forEach(function (stream_id) {
             var dependencies = stream_defs_by_id[stream_id].dependencies;
             dependencies.forEach(function (dependency) {
@@ -182,23 +204,27 @@
                     throw new Error("Stream definition for \"" + stream_id + "\" references an unknown dependency \"" + dependency + "\" !");
             });
         });
+        injected.logger.log("Check OK. State so far =", stream_defs_by_id);
         // resolve related streams
         var progress = true;
         var iteration_count = 0;
         var SAFETY_LIMIT = 25;
         var unresolved_stream_defs = stream_defs.slice();
+        injected.logger.groupCollapsed('Streams resolution…');
         while (unresolved_stream_defs.length && progress && iteration_count < SAFETY_LIMIT) {
             iteration_count++;
-            var still_unresolved_stream_defs = resolve_streams(stream_defs_by_id, unresolved_stream_defs);
+            var still_unresolved_stream_defs = resolve_streams(injected, stream_defs_by_id, unresolved_stream_defs);
             progress = still_unresolved_stream_defs.length < unresolved_stream_defs.length;
             unresolved_stream_defs = still_unresolved_stream_defs;
         }
         if (unresolved_stream_defs.length)
             throw new Error('deadlock resolving streams, please check dependencies !');
+        injected.logger.groupEnd();
         var subjects = {};
         stream_ids.forEach(function (stream_id) {
             subjects[stream_id] = stream_defs_by_id[stream_id].subjects;
         });
+        injected.logger.groupEnd();
         return subjects;
     }
     exports.auto = auto;
