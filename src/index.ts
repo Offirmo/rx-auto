@@ -6,6 +6,7 @@ import * as _ from 'lodash'
 ////////////////////////////////////
 
 import {
+	StreamId,
 	UnresolvedStreamDef,
 	UnresolvedStreamDefMap,
 	ResolvedStreamDef,
@@ -14,28 +15,48 @@ import {
 	SubjectsMap,
 } from './types'
 
+import {
+	Operator,
+	isOperator,
+} from './operators'
+
 ////////////////////////////////////
 
-const OPERATORS = {
-	combineLatest: Symbol('combineLatest'),
-	concat: Symbol('concat'),
-	merge: Symbol('merge'),
-	zip: Symbol('zip'),
-}
-
+// to auto-name rx-auto invocations, for debug
 let invocation_count = 0
-interface Injected {
+
+interface InjectableDependencies {
+	SAFETY_LIMIT: number
 	debug_id: string
 	logger: Console
+	validate: boolean
+}
+
+const default_dependencies: InjectableDependencies = {
+	SAFETY_LIMIT: 25,
+	debug_id: '???',
+	logger: {
+		groupCollapsed: () => undefined,
+		groupEnd: () => undefined,
+		log: () => undefined,
+		info: () => undefined,
+		warn: () => undefined,
+		error: () => undefined,
+	} as any as Console,
+	validate: true,
 }
 
 ////////////////////////////////////
 
+function is_correct_stream_id(id: StreamId): boolean {
+	return _.isString(id)  || _.isSymbol(id)
+}
+
 function uniformize_stream_definition(raw_definition: any, id: string): UnresolvedStreamDef {
-	if (!_.isString(id) && !_.isSymbol(id))
+	if (!is_correct_stream_id(id))
 		throw new Error(`stream ids must be strings or symbols ! ("${typeof id}")`)
 
-	let stream_def: UnresolvedStreamDef | undefined = undefined
+	let stream_def: UnresolvedStreamDef | undefined
 
 	if (_.isArray(raw_definition)) {
 		// async style format, convert it
@@ -65,9 +86,9 @@ function uniformize_stream_definition(raw_definition: any, id: string): Unresolv
 
 	if (!stream_def.generator) throw new Error(`stream definition "${id}" should have a generator !`)
 
-	stream_def.dependencies.forEach(dependency => {
-		if (!_.isString(dependency) && !_.isSymbol(dependency))
-			throw new Error(`dependencies must be stream ids, which must be strings or symbols ! ("${typeof dependency}")`)
+	stream_def.dependencies.forEach(dependency_id => {
+		if (!is_correct_stream_id(dependency_id))
+			throw new Error(`dependencies must be stream ids, which must be strings or symbols ! ("${typeof dependency_id}")`)
 	})
 
 	return stream_def
@@ -77,8 +98,8 @@ function subjects_for(observable$: Rx.Observable<any>, initial_behavior_value?: 
 	const plain$ = observable$.multicast(new Rx.Subject()).refCount()
 	return {
 		plain$,
-		behavior$: plain$.multicast(new Rx.BehaviorSubject(initial_behavior_value)).refCount(),
-		async$: plain$.multicast(new Rx.AsyncSubject()).refCount(),
+		behavior$: observable$.multicast(new Rx.BehaviorSubject(initial_behavior_value)).refCount(),
+		async$: observable$.multicast(new Rx.AsyncSubject()).refCount(),
 	}
 }
 
@@ -112,8 +133,8 @@ function resolve_stream_from_observable(stream_def: UnresolvedStreamDef): Resolv
 	}
 }
 
-function resolve_stream_from_operator(injected: Injected, stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
-	const { id, dependencies, generator } = stream_def
+function resolve_stream_from_operator(injected: InjectableDependencies, stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
+	const { id, dependencies, generator: operator } = stream_def
 
 	if (!dependencies.length) throw new Error(`stream "${id}" operator should have dependencies !`)
 
@@ -122,28 +143,75 @@ function resolve_stream_from_operator(injected: Injected, stream_defs_by_id: Unr
 	const dependencies$ = stream_def.dependencies
 		.map(id => stream_defs_by_id[id] as ResolvedStreamDef)
 		.map(resolvedStreamDef => resolvedStreamDef.observable$)
-	injected.logger.log(`Applying an operator...`, generator, stream_def.dependencies, dependencies$)
 
-	switch (generator) {
+	injected.logger.log(`Applying operators...`, stream_def.dependencies, dependencies$)
+
+	observable$ = Rx.Observable.empty()
+/*
+	switch (operator) {
 		case OPERATORS.combineLatest:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
 			observable$ = Rx.Observable.combineLatest(...dependencies$)
 			break
 
+		case OPERATORS.combineLatestHashDistinctUntilChangedShallow:
+		case OPERATORS.combineLatestHash:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
+
+			observable$ = Rx.Observable.combineLatest(...dependencies$).map(value_array => {
+				const hash:{ [k: string]: any } = {}
+				dependencies.forEach((key, index) => {
+					hash[key] = value_array[index]
+				})
+				return hash
+			})
+
+			if (generator === OPERATORS.combineLatestHashDistinctUntilChangedShallow) {
+				debugger
+				console.error('activating combineLatestHashDistinctUntilChangedShallow')
+				observable$ = observable$.distinctUntilChanged((a, b) => {
+					debugger
+					const x = shallowCompareHash1L(a, b)
+					console.warn('shallow', x)
+					return x
+				})
+			}
+			break
+
 		case OPERATORS.concat:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
 			observable$ = Rx.Observable.concat(...dependencies$)
 			break
 
+		case OPERATORS.concatDistinctUntilChanged:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
+			observable$ = Rx.Observable.concat(...dependencies$).distinctUntilChanged()
+			break
+
+		case OPERATORS.distinct:
+			if (dependencies.length > 1) throw new Error(`stream "${id}" filtering operator should have exactly 1 dependency !`)
+			observable$ = dependencies$[0].distinct()
+			break
+
+		case OPERATORS.distinctUntilChanged:
+			if (dependencies.length > 1) throw new Error(`stream "${id}" filtering operator should have exactly 1 dependency !`)
+			observable$ = dependencies$[0].distinctUntilChanged()
+			break
+
 		case OPERATORS.merge:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
 			observable$ = Rx.Observable.merge(...dependencies$)
 			break
 
 		case OPERATORS.zip:
+			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
 			observable$ = Rx.Observable.zip(...dependencies$)
 			break
 
 		default:
 			throw new Error(`stream ${id}: unrecognized or not implemented operator ! ${generator.toString()}`)
 	}
+*/
 
 	return {
 		...stream_def,
@@ -152,12 +220,13 @@ function resolve_stream_from_operator(injected: Injected, stream_defs_by_id: Unr
 	}
 }
 
-function resolve_stream_observable(injected: Injected, stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
+function resolve_stream_observable(dependencies: InjectableDependencies, stream_defs_by_id: UnresolvedStreamDefMap, stream_def: UnresolvedStreamDef): ResolvedStreamDef {
+	const { logger } = dependencies
 	const { id } = stream_def
 	let { generator } = stream_def
 	const generated = _.isFunction(generator)
 
-	injected.logger.log(`resolving stream "${id}"...`, {generated, generator})
+	logger.log(`resolving stream "${id}"...`, {generated, generator})
 
 	if (_.isFunction(generator)) {
 		// allow custom constructs. We pass full dependencies results
@@ -167,10 +236,10 @@ function resolve_stream_observable(injected: Injected, stream_defs_by_id: Unreso
 		})
 		// one call is allowed
 		generator = generator(stream_deps_by_id)
-		injected.logger.log(`from "${stream_def.id}" generator function: "${generator}"`)
+		logger.log(`from "${stream_def.id}" generator function: "${generator}"`)
 	}
 	if (!generator) {
-		injected.logger.warn(`Warning: stream definition "${id}" generator function returned "${generator}". This will be considered a final static value.`)
+		logger.warn(`Warning: stream definition "${id}" generator function returned "${generator}". This will be considered a final static value.`)
 	}
 
 	if (generator && generator.then) {
@@ -185,34 +254,25 @@ function resolve_stream_observable(injected: Injected, stream_defs_by_id: Unreso
 		return resolve_stream_from_observable({...stream_def, generator})
 	}
 
-	if (_.isSymbol(generator)) {
-		switch (generator) {
-			case OPERATORS.combineLatest:
-			case OPERATORS.concat:
-			case OPERATORS.merge:
-			case OPERATORS.zip:
-				return resolve_stream_from_operator(injected, stream_defs_by_id, {...stream_def, generator})
-
-			default:
-				// not ours, consider it a direct sync value
-				break
-		}
-	}
+	if (isOperator(generator))
+		return resolve_stream_from_operator(dependencies, stream_defs_by_id, {...stream_def, generator})
 
 	if (!generated && stream_def.dependencies.length) throw new Error(`stream "${stream_def.id}" is a direct value but has dependencies !`)
+
 	return resolve_stream_from_static_value({...stream_def, generator})
 }
 
-function resolve_streams(injected: Injected, stream_defs_by_id: UnresolvedStreamDefMap, unresolved_stream_defs: UnresolvedStreamDef[]): UnresolvedStreamDef[] {
+function resolve_streams(dependencies: InjectableDependencies, stream_defs_by_id: UnresolvedStreamDefMap, unresolved_stream_defs: UnresolvedStreamDef[]): UnresolvedStreamDef[] {
+	const { logger } = dependencies
 	const still_unresolved_stream_defs: UnresolvedStreamDef[] = []
 
 	unresolved_stream_defs.forEach(stream_def => {
 		const has_unresolved_deps = stream_def.dependencies.some(stream_id => !stream_defs_by_id[stream_id].observable$)
 
 		if (!has_unresolved_deps) {
-			injected.logger.groupCollapsed(`resolving stream "${stream_def.id}"…`)
-			stream_defs_by_id[stream_def.id] = resolve_stream_observable(injected, stream_defs_by_id, stream_def)
-			injected.logger.groupEnd()
+			if (logger.groupCollapsed) logger.groupCollapsed(`resolving stream "${stream_def.id}"…`)
+			stream_defs_by_id[stream_def.id] = resolve_stream_observable(dependencies, stream_defs_by_id, stream_def)
+			if (logger.groupEnd) logger.groupEnd()
 		}
 		else {
 			still_unresolved_stream_defs.push(stream_def)
@@ -222,22 +282,19 @@ function resolve_streams(injected: Injected, stream_defs_by_id: UnresolvedStream
 	return still_unresolved_stream_defs
 }
 
-function auto(stream_definitions: { [k: string]: any }, options: Partial<Injected> = {}): SubjectsMap {
+function auto(stream_definitions: { [k: string]: any }, partial_dependencies: Partial<InjectableDependencies> = {}): SubjectsMap {
 	invocation_count++
-	const injected: Injected = {
-		debug_id: options.debug_id || `rx-auto invocation #${invocation_count}…`,
-		logger: options.logger || {
-			groupCollapsed: () => undefined,
-			groupEnd: () => undefined,
-			log: () => undefined,
-			info: () => undefined,
-			warn: () => undefined,
-			error: () => undefined,
-		} as any as Console,
-	}
 
-	injected.logger.groupCollapsed(injected.debug_id)
-	injected.logger.log('Starting… params=', {stream_definitions, options})
+	const dependencies: InjectableDependencies = Object.assign(
+		{},
+		default_dependencies,
+		{ debug_id: `rx-auto invocation #${invocation_count}…` },
+		partial_dependencies
+	)
+	const { SAFETY_LIMIT, debug_id, logger } = dependencies
+
+	if (logger.groupCollapsed) logger.groupCollapsed(debug_id)
+	logger.log('Starting… params=', {stream_definitions, dependencies})
 
 	const stream_defs_by_id: UnresolvedStreamDefMap = {}
 	const stream_defs: UnresolvedStreamDef[] = []
@@ -254,10 +311,10 @@ function auto(stream_definitions: { [k: string]: any }, options: Partial<Injecte
 		stream_defs_by_id[stream_id] = standardized_definition
 		stream_defs.push(standardized_definition)
 	})
-	injected.logger.info(`Found ${stream_defs.length} stream definitions:`, Object.keys(stream_defs_by_id))
+	logger.info(`Found ${stream_defs.length} stream definitions:`, Object.keys(stream_defs_by_id))
 
 	// do some global checks
-	injected.logger.log('Starting a global check…')
+	logger.log('Starting a global check…')
 	stream_ids.forEach(stream_id => {
 		const dependencies = stream_defs_by_id[stream_id].dependencies
 		dependencies.forEach(dependency => {
@@ -266,25 +323,24 @@ function auto(stream_definitions: { [k: string]: any }, options: Partial<Injecte
 		})
 	})
 
-	injected.logger.log(`Check OK. State so far =`, stream_defs_by_id)
+	logger.log(`Check OK. State so far =`, stream_defs_by_id)
 
 	// resolve related streams
 	let progress = true
 	let iteration_count = 0
-	const SAFETY_LIMIT = 25
 	let unresolved_stream_defs: UnresolvedStreamDef[] = stream_defs.slice()
 
-	injected.logger.groupCollapsed('Streams resolution…')
+	if (logger.groupCollapsed) logger.groupCollapsed('Streams resolution…')
 	while (unresolved_stream_defs.length && progress && iteration_count < SAFETY_LIMIT) {
 		iteration_count++
-		const still_unresolved_stream_defs = resolve_streams(injected, stream_defs_by_id, unresolved_stream_defs)
+		const still_unresolved_stream_defs = resolve_streams(dependencies, stream_defs_by_id, unresolved_stream_defs)
 		progress = still_unresolved_stream_defs.length < unresolved_stream_defs.length
 		unresolved_stream_defs = still_unresolved_stream_defs
 	}
 
 	if (unresolved_stream_defs.length)
 		throw new Error('deadlock resolving streams, please check dependencies !')
-	injected.logger.groupEnd()
+	if (logger.groupEnd) logger.groupEnd()
 
 	const subjects: SubjectsMap = {}
 
@@ -292,9 +348,22 @@ function auto(stream_definitions: { [k: string]: any }, options: Partial<Injecte
 		subjects[stream_id] = (stream_defs_by_id[stream_id] as ResolvedStreamDef).subjects
 	})
 
-	injected.logger.groupEnd()
+	if (logger.groupEnd) logger.groupEnd()
 
 	return subjects
+}
+
+////////////////////////////////////
+
+// convenience function
+function shallowCompareHash1L(a: { [k: string]: any }, b: { [k: string]: any }): boolean {
+	debugger
+	const ka = Reflect.ownKeys(a)
+	const kb = Reflect.ownKeys(b)
+
+	if (_.difference(ka, kb).length) return false
+
+	return ka.every(k => a[k] === b[k] as any)
 }
 
 ////////////////////////////////////
@@ -306,7 +375,8 @@ export {
 	ResolvedStreamDefMap,
 	SubjectFlavors,
 	SubjectsMap,
-	OPERATORS,
-	Injected,
+	Operator,
+	InjectableDependencies,
 	auto,
+	shallowCompareHash1L,
 }

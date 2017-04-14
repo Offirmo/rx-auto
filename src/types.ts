@@ -2,10 +2,14 @@
 
 import { Observable } from '@reactivex/rxjs'
 
+//import { Operator } from './operators'
+
 ////////////////////////////////////
 
+type StreamId = string | symbol
+
 interface UnresolvedStreamDef {
-	readonly id: string
+	readonly id: StreamId
 	readonly dependencies: string[]
 	readonly initialValue?: any // for creating the BehaviorSubject
 
@@ -48,6 +52,7 @@ interface SubjectsMap {
 ////////////////////////////////////
 
 export {
+	StreamId,
 	UnresolvedStreamDef,
 	ResolvedStreamDef,
 	UnresolvedStreamDefMap,

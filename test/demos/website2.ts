@@ -20,6 +20,7 @@ function log_observable(observable: Observable<any>, id: string) {
 		()  =>   console.log(`T=${(pad + (Date.now() - start)).slice(-pad_size)} [${id}] ...[Completed]`)
 	)
 }
+
 ////////////////////////////////////
 
 

@@ -24,6 +24,8 @@
     "pretest": "npm run build:dev",
     "test": "echo 'should write tests ;-)'",
     "lint": "tslint",
+    "demo": "ts-node --project meta/dev test/demos/website3.ts",
+    "demo:watch": "nodemon --config meta/dev/nodemon.json node_modules/.bin/ts-node --project meta/dev test/demos/website3.ts",
     "demo1": "ts-node --project meta/dev test/demos/website1.ts",
     "demo1:watch": "nodemon --config meta/dev/nodemon.json node_modules/.bin/ts-node --project meta/dev test/demos/website1.ts",
     "demo2": "ts-node --project meta/dev test/demos/website2.ts",
@@ -44,8 +46,9 @@
     "nodemon": "^1.11.0",
     "np": "^2.12.0",
     "pkg-ok": "^1.0.1",
-    "ts-node": "^2.0.0",
-    "tslint": "^4.4.2",
-    "typescript": "^2.2"
+    "ts-node": "^3.0.2",
+    "tslint": "^5.0.0",
+    "typescript": "^2.2.0",
+    "typescript-string-enums": "^0.3.1"
   }
 }
