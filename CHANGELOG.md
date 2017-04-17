@@ -1,17 +1,16 @@
 
 TODO
-- allow filters ? (prevent null or duplicated data)
 - more operators
-- more complex case
 - tests
 - doc
 
-(next)
+v0.1.0
 ------
 - rewrote logs:
   - no output by default
   - if enabled, cleanly output using groupcollapsed()
 - build script is now watchable (good for dev / npm link)
+- refactored the operator feature to allow any kind of composition
 
 v0.0.6
 ------
