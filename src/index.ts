@@ -146,72 +146,7 @@ function resolve_stream_from_operator(injected: InjectableDependencies, stream_d
 
 	injected.logger.log(`Applying operators...`, stream_def.dependencies, dependencies$)
 
-	observable$ = Rx.Observable.empty()
-/*
-	switch (operator) {
-		case OPERATORS.combineLatest:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-			observable$ = Rx.Observable.combineLatest(...dependencies$)
-			break
-
-		case OPERATORS.combineLatestHashDistinctUntilChangedShallow:
-		case OPERATORS.combineLatestHash:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-
-			observable$ = Rx.Observable.combineLatest(...dependencies$).map(value_array => {
-				const hash:{ [k: string]: any } = {}
-				dependencies.forEach((key, index) => {
-					hash[key] = value_array[index]
-				})
-				return hash
-			})
-
-			if (generator === OPERATORS.combineLatestHashDistinctUntilChangedShallow) {
-				debugger
-				console.error('activating combineLatestHashDistinctUntilChangedShallow')
-				observable$ = observable$.distinctUntilChanged((a, b) => {
-					debugger
-					const x = shallowCompareHash1L(a, b)
-					console.warn('shallow', x)
-					return x
-				})
-			}
-			break
-
-		case OPERATORS.concat:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-			observable$ = Rx.Observable.concat(...dependencies$)
-			break
-
-		case OPERATORS.concatDistinctUntilChanged:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-			observable$ = Rx.Observable.concat(...dependencies$).distinctUntilChanged()
-			break
-
-		case OPERATORS.distinct:
-			if (dependencies.length > 1) throw new Error(`stream "${id}" filtering operator should have exactly 1 dependency !`)
-			observable$ = dependencies$[0].distinct()
-			break
-
-		case OPERATORS.distinctUntilChanged:
-			if (dependencies.length > 1) throw new Error(`stream "${id}" filtering operator should have exactly 1 dependency !`)
-			observable$ = dependencies$[0].distinctUntilChanged()
-			break
-
-		case OPERATORS.merge:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-			observable$ = Rx.Observable.merge(...dependencies$)
-			break
-
-		case OPERATORS.zip:
-			if (dependencies.length < 2) throw new Error(`stream "${id}" combining operator should have more than 1 dependency !`)
-			observable$ = Rx.Observable.zip(...dependencies$)
-			break
-
-		default:
-			throw new Error(`stream ${id}: unrecognized or not implemented operator ! ${generator.toString()}`)
-	}
-*/
+	observable$ = operator.apply(...dependencies$)
 
 	return {
 		...stream_def,
@@ -356,6 +291,7 @@ function auto(stream_definitions: { [k: string]: any }, partial_dependencies: Pa
 ////////////////////////////////////
 
 // convenience function
+/*
 function shallowCompareHash1L(a: { [k: string]: any }, b: { [k: string]: any }): boolean {
 	debugger
 	const ka = Reflect.ownKeys(a)
@@ -365,6 +301,7 @@ function shallowCompareHash1L(a: { [k: string]: any }, b: { [k: string]: any }):
 
 	return ka.every(k => a[k] === b[k] as any)
 }
+*/
 
 ////////////////////////////////////
 
@@ -378,5 +315,5 @@ export {
 	Operator,
 	InjectableDependencies,
 	auto,
-	shallowCompareHash1L,
+	//shallowCompareHash1L,
 }

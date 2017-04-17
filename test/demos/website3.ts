@@ -12,10 +12,11 @@ import { log_observable } from './rx-log'
 
 
 let FETCH_DELAY = 1000
-let FRESH_DATA = 'fresh foo'
-let CACHED_DATA: string | null = 'cached foo'
-let FRESH_PWD = 'fresh pwd'
-let CACHED_PWD: string | null = 'cached pwd'
+let FETCH_SUCCEED_ON_COUNT = 2
+let FRESH_DATA = '[foo] data v1'
+let CACHED_DATA: string | null = '[foo] data v1'
+let FRESH_PWD = 'pwd v1'
+let CACHED_PWD: string | null = '[foo] pwd v1'
 let FETCH_SHOULD_SUCCEED = true
 
 let test_case = 1
@@ -43,16 +44,32 @@ switch (test_case) {
 
 const vault_id = 'foo'
 
+let fetch_raw_data_count = 0
 function fetch_raw_data(vault_id: string) {
+	fetch_raw_data_count++
+	console.log(`fetch_raw_data called ! #${fetch_raw_data_count}`)
+
 	return new Promise((resolve, reject) => {
-		console.log('fetch_raw_data called !')
 		setTimeout(() => {
-			console.log('fetch_raw_data resolving...')
-			if (!FETCH_SHOULD_SUCCEED)
+			console.log('fetch_raw_data resolving...', )
+			if (!FETCH_SHOULD_SUCCEED || fetch_raw_data_count < FETCH_SUCCEED_ON_COUNT)
 				reject(new Error('404'))
 			else
-				resolve(`[raw data for ${vault_id}]` + FRESH_DATA)
+				resolve(FRESH_DATA)
 		}, FETCH_DELAY)
+	})
+}
+
+function retriable_fetch_raw_data(vault_id: string) {
+	console.log(`retriable_fetch_raw_data called !`)
+
+	return Observable.create((observer: any) => {
+		fetch_raw_data(vault_id)
+		.then(val => {
+			observer.next(val)
+			observer.complete()
+		})
+		.catch(observer.error)
 	})
 }
 
@@ -69,7 +86,7 @@ function get_password$() {
 }
 
 function decrypt_if_needed_then_parse_data(vault_id: string, raw_data: string, password: string = ''): Object {
-	return {}
+	return {vault_id, raw_data, password}
 }
 ////////////////////////////////////
 
@@ -83,7 +100,7 @@ const subjects = auto({
 	cached_raw_data:
 		get_cached_raw_data(vault_id),
 	fresh_raw_data_once:
-		fetch_raw_data(vault_id),
+		retriable_fetch_raw_data(vault_id),
 	fresh_raw_data: [
 		'fresh_raw_data_once',
 		Operator().retry(3)
@@ -119,7 +136,7 @@ const subjects = auto({
 		})
 	],
 }, {
-	logger: console,
+	//logger: console,
 	validate: true,
 })
 
