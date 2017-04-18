@@ -4,6 +4,6 @@
 		"noEmit": false,
 		"module": "ES2015",
 		"target": "ES2017",
-		"outDir": "../../dist/es7"
+		"outDir": "../../dist/es2017"
 	}
 }

@@ -1,17 +1,14 @@
-import commonjs from 'rollup-plugin-commonjs';
-import nodeResolve from 'rollup-plugin-node-resolve';
+//import commonjs from 'rollup-plugin-commonjs';
+import nodeResolve from 'rollup-plugin-node-resolve'
 
 export default {
-	entry: 'dist/es7/index.js',
-	dest: 'dist/bundle.es7.cjs.js',
+	entry: 'dist/es2017/index.js',
+	dest: 'dist/bundle.es2017.umd.js',
 	format: 'umd',
 	plugins: [
 		nodeResolve({
 			jsnext: true,
 			main: true
-		}),
-
-		commonjs({
 		})
 	]
 }

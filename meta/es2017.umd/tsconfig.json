@@ -3,7 +3,7 @@
 	"compilerOptions": {
 		"noEmit": false,
 		"module": "UMD",
-		"target": "ES5",
-		"outDir": "../../dist/es5.umd"
+		"target": "ES2017",
+		"outDir": "../../dist/es2017.umd"
 	}
 }
